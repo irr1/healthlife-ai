@@ -1,0 +1,26 @@
+{
+  "name": "healthlife-ai",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:backend\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:backend": "cd apps/backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "npm run build:web",
+    "build:web": "cd apps/web && npm run build",
+    "lint": "npm run lint:web",
+    "lint:web": "cd apps/web && npm run lint",
+    "test": "npm run test:backend",
+    "test:backend": "cd apps/backend && pytest",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
