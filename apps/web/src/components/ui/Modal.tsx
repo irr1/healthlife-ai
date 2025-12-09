@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, ReactNode } from 'react'
+import { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface ModalProps {
@@ -39,12 +39,12 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn"
       onClick={handleBackdropClick}
     >
       <div
         className={cn(
-          'relative w-full bg-white rounded-lg shadow-xl',
+          'relative w-full bg-white rounded-2xl shadow-2xl border border-purple-100 animate-scaleIn',
           sizes[size]
         )}
         onClick={(e) => e.stopPropagation()}

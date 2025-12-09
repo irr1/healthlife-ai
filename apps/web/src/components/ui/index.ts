@@ -13,3 +13,6 @@ export type { ModalProps } from './Modal'
 
 export { default as ToastProvider, useToast } from './Toast'
 export type { Toast, ToastType } from './Toast'
+
+export { default as Logo } from './Logo'
+export type { LogoProps } from './Logo'

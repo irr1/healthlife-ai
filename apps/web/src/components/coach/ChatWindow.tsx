@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import Card, { CardContent } from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -26,11 +26,6 @@ export default function ChatWindow({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading || disabled) return
@@ -54,7 +49,7 @@ export default function ChatWindow({
 
   return (
     <Card className="flex flex-col h-[600px]">
-      <CardContent padding="none" className="flex flex-col h-full">
+      <CardContent className="flex flex-col h-full p-0">
         {/* Chat Header */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-4 rounded-t-lg">
           <div className="flex items-center gap-3">

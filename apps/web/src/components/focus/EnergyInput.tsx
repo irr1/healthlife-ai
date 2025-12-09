@@ -15,10 +15,10 @@ const energyLevels = [
   { value: 2, label: 'Very Low', emoji: '😓', color: 'bg-red-400' },
   { value: 3, label: 'Low', emoji: '😔', color: 'bg-orange-400' },
   { value: 4, label: 'Below Average', emoji: '😐', color: 'bg-orange-300' },
-  { value: 5, label: 'Average', emoji: '😊', color: 'bg-yellow-400' },
-  { value: 6, label: 'Above Average', emoji: '😃', color: 'bg-yellow-300' },
+  { value: 5, label: 'Average', emoji: '🙂', color: 'bg-yellow-400' },
+  { value: 6, label: 'Above Average', emoji: '😊', color: 'bg-yellow-300' },
   { value: 7, label: 'Good', emoji: '😄', color: 'bg-lime-400' },
-  { value: 8, label: 'Great', emoji: '🙂', color: 'bg-green-400' },
+  { value: 8, label: 'Great', emoji: '😃', color: 'bg-green-400' },
   { value: 9, label: 'Excellent', emoji: '😁', color: 'bg-green-500' },
   { value: 10, label: 'Peak', emoji: '🚀', color: 'bg-green-600' },
 ]

@@ -168,7 +168,7 @@ export default function CoachPage() {
 
       {/* Daily Insights */}
       <div>
-        <h2 className="text-2xl font-bold mb-4">�� Daily Insights</h2>
+        <h2 className="text-2xl font-bold mb-4">💡 Daily Insights</h2>
         <DailyInsightsList
           insights={insights}
           onDismiss={handleDismissInsight}

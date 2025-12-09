@@ -33,8 +33,8 @@ const timeColors = {
 }
 
 const timeIcons = {
-  morning: '🌅',
-  afternoon: '☀️',
+  morning: '☀️',
+  afternoon: '🌤️',
   evening: '🌙',
 }
 
