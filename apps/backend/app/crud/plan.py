@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.plan import Plan
+from app.models.task import Task
 from app.schemas.plan import PlanCreate, PlanUpdate
 
 
@@ -86,6 +87,14 @@ async def update_plan(db: AsyncSession, plan_id: int, plan_in: PlanUpdate) -> Op
     await db.refresh(db_plan)
 
     return db_plan
+
+
+async def get_plan_tasks(db: AsyncSession, plan_id: int) -> List[Task]:
+    """Get all tasks for a plan"""
+    result = await db.execute(
+        select(Task).where(Task.plan_id == plan_id).order_by(Task.scheduled_date)
+    )
+    return result.scalars().all()
 
 
 async def deactivate_user_plans(db: AsyncSession, user_id: int) -> None:
