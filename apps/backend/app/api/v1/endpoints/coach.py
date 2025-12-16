@@ -16,6 +16,7 @@ from app.schemas.coach import (
     PlanAdjustment,
     PlanAdjustmentResponse
 )
+from app.services.openai_service import chat_with_coach as ai_chat, generate_daily_insight
 
 router = APIRouter()
 
@@ -27,34 +28,33 @@ async def chat_with_coach(
     current_user: UserModel = Depends(get_current_user)
 ) -> ChatResponse:
     """
-    Chat with AI health coach (stub)
+    Chat with AI health coach
 
-    Send a message to the AI coach and receive personalized advice.
-    This is a stub endpoint - in production, this would integrate with OpenAI/Claude API.
+    Send a message to the AI coach and receive personalized advice powered by OpenAI.
 
     - **message**: User's message
     - **context**: Optional context for the conversation
 
     Returns coach's response with suggestions
     """
-    # Stub responses - in production, call OpenAI/Claude API
-    stub_responses = [
-        "That's a great question! Based on your current goals, I recommend focusing on consistency rather than intensity.",
-        "I understand your concern. Let's break this down into smaller, manageable steps.",
-        "Excellent progress! Your dedication is paying off. Have you considered tracking your energy levels?",
-        "That's completely normal. Many people experience similar challenges. What matters is how you respond to them.",
-    ]
+    # Prepare user context for AI
+    user_context = {
+        "goals": current_user.goals,
+        "activity_level": current_user.activity_level,
+        "age": current_user.age,
+        "gender": current_user.gender
+    }
 
-    stub_suggestions = [
-        "How can I improve my morning routine?",
-        "What should I track to measure progress?",
-        "Can you adjust my plan based on my feedback?",
-        "Tell me more about habit formation"
-    ]
+    # Call OpenAI service
+    ai_response = ai_chat(
+        message=message.message,
+        user_context=user_context,
+        conversation_history=None  # Could store conversation history in future
+    )
 
     return ChatResponse(
-        response=random.choice(stub_responses),
-        suggestions=random.sample(stub_suggestions, 3),
+        response=ai_response["response"],
+        suggestions=ai_response["suggestions"],
         timestamp=datetime.utcnow()
     )
 
@@ -65,48 +65,34 @@ async def get_daily_insight(
     current_user: UserModel = Depends(get_current_user)
 ) -> DailyInsight:
     """
-    Get daily insight from AI coach (stub)
+    Get daily insight from AI coach
 
-    Receive a personalized daily insight based on your progress and goals.
-    This is a stub endpoint - in production, this would be AI-generated based on user data.
+    Receive a personalized daily insight based on your progress and goals, powered by OpenAI.
 
     Returns daily insight with actionable recommendations
     """
-    # Stub insights - in production, generate based on user data
-    stub_insights = [
-        {
-            "title": "The Power of Small Wins",
-            "message": "Research shows that celebrating small victories increases motivation by 31%. Your streak of 5 days is worth celebrating!",
-            "category": "motivation",
-            "action_items": [
-                "Log your daily wins in the app",
-                "Share your progress with accountability partner",
-                "Reward yourself for consistency"
-            ]
-        },
-        {
-            "title": "Recovery is Progress",
-            "message": "You've been pushing hard this week. Remember: rest is when your body adapts and grows stronger.",
-            "category": "health",
-            "action_items": [
-                "Schedule a rest day this week",
-                "Aim for 7-8 hours of sleep tonight",
-                "Try a gentle stretching session"
-            ]
-        },
-        {
-            "title": "Habit Stacking for Success",
-            "message": "Attach new habits to existing ones. Your morning coffee could be the perfect trigger for a 5-minute meditation.",
-            "category": "habit",
-            "action_items": [
-                "Identify your strongest existing habits",
-                "Choose one new habit to stack",
-                "Practice for 7 days to build the connection"
-            ]
-        }
-    ]
+    # Prepare user data for AI insight generation
+    user_data = {
+        "goals": current_user.goals,
+        "activity_level": current_user.activity_level,
+        "recent_activity": "tracking daily tasks"  # Could be enhanced with real activity data
+    }
 
-    insight_data = random.choice(stub_insights)
+    # Generate AI-powered insight
+    ai_message = generate_daily_insight(user_data)
+
+    # Return insight with some default action items
+    # In future, these could also be AI-generated
+    insight_data = {
+        "title": "Today's Insight",
+        "message": ai_message,
+        "category": "motivation",
+        "action_items": [
+            "Focus on completing one task at a time",
+            "Track your progress in the app",
+            "Celebrate small wins along the way"
+        ]
+    }
 
     return DailyInsight(
         title=insight_data["title"],

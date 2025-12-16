@@ -1,6 +1,6 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react';
 import {
   ChatWindow,
   DailyInsightsList,
@@ -8,104 +8,64 @@ import {
   type Message,
   type Insight,
   type Article,
-} from '@/components/coach'
-import { useToast } from '@/components/ui/Toast'
-
-// TODO: Replace with API calls
-const mockInsights: Insight[] = [
-  {
-    id: '1',
-    type: 'tip',
-    title: 'Morning Exercise Benefits',
-    message: 'Studies show that exercising in the morning can improve your sleep quality by up to 65%. Your body temperature rises during exercise and takes about 4-5 hours to drop, signaling your body it\'s time to rest.',
-    date: 'Today at 6:00 AM',
-    isNew: true,
-  },
-  {
-    id: '2',
-    type: 'achievement',
-    title: '5-Day Streak Milestone!',
-    message: 'Congratulations! You\'ve maintained a 5-day streak of completing your daily tasks. Research shows that it takes 21 days to form a habit - you\'re already 24% there!',
-    date: 'Today at 9:00 AM',
-    isNew: true,
-  },
-  {
-    id: '3',
-    type: 'suggestion',
-    title: 'Optimize Your Protein Intake',
-    message: 'Based on your recent meals, consider adding 20-30g of protein to your breakfast. This can help reduce cravings throughout the day and support muscle recovery from your workouts.',
-    date: 'Yesterday at 7:30 PM',
-  },
-]
-
-const mockArticles: Article[] = [
-  {
-    id: '1',
-    title: 'The Science of Building Sustainable Habits',
-    description: 'Learn the proven psychological principles behind habit formation and how to apply them to your health journey.',
-    category: 'habits',
-    readTime: '8 min read',
-    tags: ['psychology', 'behavior change', 'routine'],
-    isPopular: true,
-  },
-  {
-    id: '2',
-    title: 'Protein: Complete Guide for Beginners',
-    description: 'Everything you need to know about protein - how much you need, best sources, and timing for optimal results.',
-    category: 'nutrition',
-    readTime: '12 min read',
-    tags: ['protein', 'macros', 'muscle building'],
-    isPopular: true,
-  },
-  {
-    id: '3',
-    title: 'Morning vs Evening Workouts: What\'s Best?',
-    description: 'Discover the pros and cons of different workout times and how to choose what works best for your lifestyle.',
-    category: 'fitness',
-    readTime: '6 min read',
-    tags: ['timing', 'performance', 'schedule'],
-  },
-  {
-    id: '4',
-    title: 'Sleep Optimization: 10 Evidence-Based Tips',
-    description: 'Improve your sleep quality with these scientifically proven strategies for better rest and recovery.',
-    category: 'sleep',
-    readTime: '10 min read',
-    tags: ['sleep hygiene', 'recovery', 'health'],
-    isPopular: true,
-  },
-  {
-    id: '5',
-    title: 'Overcoming Mental Barriers in Fitness',
-    description: 'Learn how to push through mental blocks and develop the mindset of a champion.',
-    category: 'mindset',
-    readTime: '7 min read',
-    tags: ['psychology', 'motivation', 'mindfulness'],
-  },
-  {
-    id: '6',
-    title: 'Meal Prep 101: Save Time and Eat Healthy',
-    description: 'A beginner-friendly guide to meal prepping that will save you time and keep you on track.',
-    category: 'nutrition',
-    readTime: '15 min read',
-    tags: ['meal prep', 'planning', 'efficiency'],
-  },
-]
+} from '@/components/coach';
+import { useToast } from '@/components/ui/Toast';
+import { useChatWithCoach, useDailyInsight, useKnowledgeSearch } from '@/hooks/useCoach';
 
 const initialMessages: Message[] = [
   {
     id: '1',
     role: 'assistant',
-    content: 'Hello! I\'m your AI health coach. I\'m here to help you with fitness, nutrition, habits, and overall wellness. What would you like to talk about today?',
+    content:
+      "Hello! I'm your AI health coach. I'm here to help you with fitness, nutrition, habits, and overall wellness. What would you like to talk about today?",
     timestamp: new Date(Date.now() - 60000),
   },
-]
+];
 
 export default function CoachPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [isLoading, setIsLoading] = useState(false)
-  const [insights, setInsights] = useState<Insight[]>(mockInsights)
-  const { showToast } = useToast()
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [knowledgeQuery, setKnowledgeQuery] = useState('health');
+  const { showToast } = useToast();
+
+  // Fetch daily insight from API
+  const { data: insightData, isLoading: insightLoading, error: insightError, refetch: refetchInsight } = useDailyInsight();
+
+  // Fetch knowledge base articles from API
+  const {
+    data: knowledgeData,
+    isLoading: knowledgeLoading,
+    error: knowledgeError,
+  } = useKnowledgeSearch(knowledgeQuery, undefined, 6);
+
+  // Chat with AI coach mutation
+  const { mutateAsync: sendChatMessage, isPending: isChatting } = useChatWithCoach();
+
+  // Convert API insight to Insight format
+  const insights: Insight[] = insightData
+    ? [
+        {
+          id: '1',
+          type: 'tip',
+          title: 'Daily Insight',
+          message: insightData.content || insightData.message || 'No insight available',
+          date: new Date().toLocaleString(),
+          isNew: true,
+        },
+      ]
+    : [];
+
+  // Convert API knowledge results to Article format
+  const articles: Article[] = knowledgeData
+    ? knowledgeData.map((result: any, index: number) => ({
+        id: index.toString(),
+        title: result.title || result.content?.substring(0, 50) + '...',
+        description: result.content || result.summary || 'No description available',
+        category: result.category || 'general',
+        readTime: '5 min read',
+        tags: result.tags || [],
+        isPopular: result.relevance_score > 0.8,
+      }))
+    : [];
 
   const handleSendMessage = async (content: string) => {
     // Add user message
@@ -114,48 +74,100 @@ export default function CoachPage() {
       role: 'user',
       content,
       timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, userMessage])
+    };
+    setMessages((prev) => [...prev, userMessage]);
 
     // Show typing indicator
-    setIsLoading(true)
     const typingMessage: Message = {
       id: 'typing',
       role: 'assistant',
       content: '',
       timestamp: new Date(),
       isTyping: true,
-    }
-    setMessages((prev) => [...prev, typingMessage])
+    };
+    setMessages((prev) => [...prev, typingMessage]);
 
-    // TODO: Replace with actual AI API call
-    setTimeout(() => {
+    try {
+      // Call AI API
+      const response = await sendChatMessage({ message: content });
+
       // Remove typing indicator
-      setMessages((prev) => prev.filter((m) => m.id !== 'typing'))
+      setMessages((prev) => prev.filter((m) => m.id !== 'typing'));
 
       // Add AI response
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: getMockResponse(content),
+        content: response.response || response.message || 'I apologize, but I could not generate a response.',
         timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, aiResponse])
-      setIsLoading(false)
-    }, 1500)
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      // Remove typing indicator
+      setMessages((prev) => prev.filter((m) => m.id !== 'typing'));
+
+      // Show error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+
+      showToast({
+        type: 'error',
+        title: 'Failed to send message',
+        message: 'Please try again',
+      });
+    }
+  };
+
+  const handleDismissInsight = async () => {
+    showToast({ type: 'success', title: 'Generating new insight...' });
+    // Refetch to get a new AI-generated insight
+    await refetchInsight();
+  };
+
+  const handleViewMoreInsight = () => {
+    showToast({ type: 'info', title: 'Full insight view coming soon!' });
+  };
+
+  const handleArticleClick = () => {
+    showToast({ type: 'info', title: 'Article viewer coming soon!' });
+  };
+
+  // Loading state
+  if (insightLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading your AI coach...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  const handleDismissInsight = (insightId: string) => {
-    setInsights((prev) => prev.filter((i) => i.id !== insightId))
-    showToast({ type: 'success', title: 'Insight dismissed' })
-  }
+  // Error state
+  if (insightError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">AI Coach</h1>
+          <p className="text-gray-600">Your personal guide to health and wellness</p>
+        </div>
 
-  const handleViewMoreInsight = (insightId: string) => {
-    showToast({ type: 'info', title: 'Full insight view coming soon!' })
-  }
-
-  const handleArticleClick = (articleId: string) => {
-    showToast({ type: 'info', title: 'Article viewer coming soon!' })
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-red-800 font-semibold mb-2">Failed to load AI coach data</h3>
+          <p className="text-red-600 text-sm">
+            {(insightError as any)?.detail || 'Please try refreshing the page'}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -182,42 +194,15 @@ export default function CoachPage() {
         {/* Left Column - Chat (2/3 width) */}
         <div className="lg:col-span-2">
           <h2 className="text-2xl font-bold mb-4">💬 Chat with AI Coach</h2>
-          <ChatWindow
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-          />
+          <ChatWindow messages={messages} onSendMessage={handleSendMessage} isLoading={isChatting} />
         </div>
 
         {/* Right Column - Knowledge Base (1/3 width) */}
         <div>
           <h2 className="text-2xl font-bold mb-4">📚 Knowledge Base</h2>
-          <KnowledgeBase articles={mockArticles} onArticleClick={handleArticleClick} />
+          <KnowledgeBase articles={articles} onArticleClick={handleArticleClick} />
         </div>
       </div>
     </div>
-  )
-}
-
-// Mock AI responses - TODO: Replace with actual AI API
-function getMockResponse(userMessage: string): string {
-  const lowerMessage = userMessage.toLowerCase()
-
-  if (lowerMessage.includes('workout') || lowerMessage.includes('exercise')) {
-    return 'Great question about workouts! Based on your current fitness level, I recommend starting with 3-4 sessions per week. Focus on compound movements like squats, deadlifts, and push-ups. Would you like me to create a personalized workout plan for you?'
-  }
-
-  if (lowerMessage.includes('meal') || lowerMessage.includes('nutrition') || lowerMessage.includes('food')) {
-    return 'Nutrition is key to reaching your goals! I\'d recommend focusing on whole foods: lean proteins, complex carbs, and healthy fats. Aim for 4-5 meals throughout the day to keep your metabolism active. What specific nutritional goals do you have?'
-  }
-
-  if (lowerMessage.includes('sleep') || lowerMessage.includes('tired')) {
-    return 'Sleep is crucial for recovery and overall health. Try to maintain a consistent sleep schedule, avoid screens 1 hour before bed, and keep your room cool (around 65-68°F). Aim for 7-9 hours per night. How many hours are you currently getting?'
-  }
-
-  if (lowerMessage.includes('motivation') || lowerMessage.includes('give up')) {
-    return 'I understand that staying motivated can be challenging! Remember why you started this journey. Break your big goals into smaller, achievable milestones. Celebrate every win, no matter how small. You\'ve got this! What\'s been your biggest challenge lately?'
-  }
-
-  return 'That\'s a great question! I\'m here to help you with anything related to fitness, nutrition, sleep, habits, or mental wellness. Feel free to ask me anything specific, and I\'ll provide personalized advice based on your goals and current progress.'
+  );
 }

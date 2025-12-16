@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
+from datetime import date, timedelta
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User as UserModel
+from app.models.task import TaskPriority, TimeOfDay
 from app.schemas.plan import Plan, PlanCreate
+from app.schemas.task import TaskCreate
 from app.crud import plan as crud_plan
+from app.crud import task as crud_task
+from app.services.openai_service import generate_health_plan
 
 router = APIRouter()
 
@@ -28,42 +33,100 @@ async def generate_plan(
     # Deactivate all existing plans
     await crud_plan.deactivate_user_plans(db, current_user.id)
 
-    # Create stub plan
-    # TODO: Replace with AI-generated plan based on user profile
-    stub_roadmap = {
-        "phases": [
-            {
-                "name": "Foundation Phase",
-                "duration": "2 weeks",
-                "goals": ["Establish baseline habits", "Track current metrics"],
-                "milestones": ["Complete daily tracking for 14 days", "First biometric measurements"]
-            },
-            {
-                "name": "Progress Phase",
-                "duration": "4 weeks",
-                "goals": ["Build sustainable habits", "See measurable progress"],
-                "milestones": ["10% progress toward goal", "Consistent weekly tracking"]
-            },
-            {
-                "name": "Optimization Phase",
-                "duration": "6 weeks",
-                "goals": ["Fine-tune approach", "Accelerate results"],
-                "milestones": ["50% progress toward goal", "Habit consistency above 80%"]
-            }
-        ],
-        "timeline": {
-            "total_duration": "12 weeks",
-            "estimated_completion": "Based on current progress rate"
-        }
+    # Prepare user data for AI plan generation
+    user_data = {
+        "age": current_user.age,
+        "gender": current_user.gender,
+        "current_weight": current_user.current_weight,
+        "goal_weight": current_user.goal_weight,
+        "height": current_user.height,
+        "activity_level": current_user.activity_level,
+        "goals": current_user.goals
     }
+
+    # Generate AI-powered roadmap using OpenAI
+    ai_roadmap = generate_health_plan(user_data, current_user.goals)
 
     plan_in = PlanCreate(
         title="Your Personalized Health Journey",
-        description="A customized plan to help you achieve your health goals",
-        roadmap=stub_roadmap
+        description="An AI-generated plan tailored to your goals and fitness level",
+        roadmap=ai_roadmap
     )
 
     db_plan = await crud_plan.create_plan(db, current_user.id, plan_in)
+    await db.flush()
+
+    # Generate initial tasks for the current week
+    # Use today + 1 day to ensure tasks are always visible (handles timezone issues)
+    today = date.today()
+    start_date = today  # Start from today
+
+    sample_tasks = [
+        # Day 1 (Today)
+        TaskCreate(
+            title="Morning Workout",
+            description="30-minute cardio session to kickstart your day",
+            priority=TaskPriority.HIGH,
+            scheduled_date=start_date,
+            time_of_day=TimeOfDay.MORNING,
+            duration_minutes=30
+        ),
+        TaskCreate(
+            title="Track Your Meals",
+            description="Log all meals and snacks in your food diary",
+            priority=TaskPriority.MEDIUM,
+            scheduled_date=start_date,
+            time_of_day=TimeOfDay.ANYTIME,
+            duration_minutes=10
+        ),
+        TaskCreate(
+            title="Evening Stretching",
+            description="15-minute stretching routine before bed",
+            priority=TaskPriority.MEDIUM,
+            scheduled_date=start_date,
+            time_of_day=TimeOfDay.EVENING,
+            duration_minutes=15
+        ),
+        # Day 2
+        TaskCreate(
+            title="Morning Hydration",
+            description="Drink 500ml of water first thing in the morning",
+            priority=TaskPriority.HIGH,
+            scheduled_date=start_date + timedelta(days=1),
+            time_of_day=TimeOfDay.MORNING,
+            duration_minutes=5
+        ),
+        TaskCreate(
+            title="Healthy Lunch Prep",
+            description="Prepare a balanced lunch with protein and vegetables",
+            priority=TaskPriority.MEDIUM,
+            scheduled_date=start_date + timedelta(days=1),
+            time_of_day=TimeOfDay.AFTERNOON,
+            duration_minutes=20
+        ),
+        # Day 3
+        TaskCreate(
+            title="Yoga Session",
+            description="20-minute yoga for flexibility and mindfulness",
+            priority=TaskPriority.MEDIUM,
+            scheduled_date=start_date + timedelta(days=2),
+            time_of_day=TimeOfDay.MORNING,
+            duration_minutes=20
+        ),
+        TaskCreate(
+            title="Healthy Dinner",
+            description="Cook a nutritious dinner with vegetables and lean protein",
+            priority=TaskPriority.MEDIUM,
+            scheduled_date=start_date + timedelta(days=2),
+            time_of_day=TimeOfDay.EVENING,
+            duration_minutes=30
+        ),
+    ]
+
+    # Create all tasks
+    for task_data in sample_tasks:
+        await crud_task.create_task(db, db_plan.id, task_data)
+
     await db.commit()
     await db.refresh(db_plan)
 

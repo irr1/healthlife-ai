@@ -31,8 +31,8 @@ async def get_today_tasks(
             detail="No active plan found. Generate a new plan first."
         )
 
-    # Get today's tasks
-    today = datetime.utcnow().date()
+    # Get today's tasks (use local server time, not UTC)
+    today = datetime.now().date()
     tasks = await crud_task.get_tasks_by_date(db, plan.id, today)
 
     return tasks
@@ -94,6 +94,118 @@ async def update_task_status(
     await db.refresh(updated_task)
 
     return updated_task
+
+
+@router.post("/{task_id}/complete", response_model=Task)
+async def complete_task(
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> Task:
+    """
+    Mark task as completed
+
+    Returns completed task
+    """
+    # Get active plan
+    plan = await crud_plan.get_active_plan(db, current_user.id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active plan found"
+        )
+
+    # Get task
+    task = await crud_task.get_task_by_id(db, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    # Verify task belongs to user's active plan
+    if task.plan_id != plan.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot complete task from another plan"
+        )
+
+    # Complete task
+    from app.models.task import TaskStatus
+    from app.schemas.task import TaskUpdate
+
+    completed_task = await crud_task.update_task(
+        db,
+        task_id,
+        TaskUpdate(status=TaskStatus.COMPLETED)
+    )
+
+    if not completed_task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    await db.commit()
+    await db.refresh(completed_task)
+
+    return completed_task
+
+
+@router.post("/{task_id}/skip", response_model=Task)
+async def skip_task(
+    task_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> Task:
+    """
+    Mark task as skipped
+
+    Returns skipped task
+    """
+    # Get active plan
+    plan = await crud_plan.get_active_plan(db, current_user.id)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active plan found"
+        )
+
+    # Get task
+    task = await crud_task.get_task_by_id(db, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    # Verify task belongs to user's active plan
+    if task.plan_id != plan.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot skip task from another plan"
+        )
+
+    # Skip task
+    from app.models.task import TaskStatus
+    from app.schemas.task import TaskUpdate
+
+    skipped_task = await crud_task.update_task(
+        db,
+        task_id,
+        TaskUpdate(status=TaskStatus.SKIPPED)
+    )
+
+    if not skipped_task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+
+    await db.commit()
+    await db.refresh(skipped_task)
+
+    return skipped_task
 
 
 @router.post("/{task_id}/log", response_model=Task)

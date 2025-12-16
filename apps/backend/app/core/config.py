@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4-turbo-preview"
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = []
