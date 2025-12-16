@@ -32,7 +32,7 @@ export default function MilestoneCard({ milestones, title = 'Milestones' }: Mile
 
   return (
     <Card>
-      <CardContent padding="md">
+      <CardContent className="p-6">
         <h3 className="text-xl font-bold mb-4">{title}</h3>
 
         {/* Upcoming Milestones */}

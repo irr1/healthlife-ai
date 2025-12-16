@@ -15,7 +15,7 @@ export default function WhyBlock({ reason, goal, dateStarted, onEdit }: WhyBlock
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-lg font-semibold opacity-90 mb-1">Your "Why"</h3>
+            <h3 className="text-lg font-semibold opacity-90 mb-1">Your &quot;Why&quot;</h3>
             <p className="text-sm opacity-80">Remember why you started</p>
           </div>
           <div className="text-4xl">💫</div>

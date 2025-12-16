@@ -41,7 +41,7 @@ export default function BiometricsChart({
   if (!currentMetric) {
     return (
       <Card>
-        <CardContent padding="md">
+        <CardContent className="p-6">
           <p className="text-center text-gray-600">No biometric data available</p>
         </CardContent>
       </Card>

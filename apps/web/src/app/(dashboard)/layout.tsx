@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Logo } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { useUser, useAuth } from '@/hooks/useUser'
 
 const navItems = [
   { href: '/focus', label: 'Focus', icon: '🎯', gradient: 'from-blue-500 to-cyan-500' },
@@ -21,6 +22,18 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // Get user data and auth functions
+  const { data: user } = useUser()
+  const { logout } = useAuth()
+
+  // Get user initials
+  const getUserInitials = () => {
+    if (!user?.full_name) return 'U'
+    const names = user.full_name.split(' ')
+    return names.map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
@@ -108,18 +121,61 @@ export default function DashboardLayout({
 
         {/* User Profile Section */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/20 glass">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/50 transition-all cursor-pointer group">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg group-hover:scale-110 transition-transform">
-              JD
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm text-gray-900 truncate">John Doe</p>
-              <p className="text-xs text-gray-600">Level 12</p>
-            </div>
-            <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/50 transition-all group"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold shadow-lg group-hover:scale-110 transition-transform">
+                {getUserInitials()}
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <p className="font-semibold text-sm text-gray-900 truncate">
+                  {user?.full_name || 'User'}
+                </p>
+                <p className="text-xs text-gray-600">{user?.email || 'Loading...'}</p>
+              </div>
+              <svg
+                className={cn(
+                  'w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-all',
+                  showUserMenu && 'rotate-180'
+                )}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* User Menu Dropdown */}
+            {showUserMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden animate-fadeIn">
+                <Link
+                  href="/you"
+                  onClick={() => setShowUserMenu(false)}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                >
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-700">Profile & Settings</span>
+                </Link>
+
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false)
+                    logout()
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-red-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span className="text-sm font-medium">Logout</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </aside>

@@ -55,7 +55,7 @@ export default function DailyInsight({ insight, onDismiss, onViewMore }: DailyIn
 
   return (
     <Card
-      variant="outlined"
+      variant="bordered"
       className={cn(
         'border-2 relative overflow-hidden',
         config.bgColor,

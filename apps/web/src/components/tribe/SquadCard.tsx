@@ -186,7 +186,7 @@ export default function SquadCard({
         {isUserMember && (
           <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg text-center">
             <p className="text-sm text-green-800 font-medium">
-              ✓ You're a member of this squad
+              ✓ You&apos;re a member of this squad
             </p>
           </div>
         )}

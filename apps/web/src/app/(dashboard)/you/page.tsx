@@ -1,6 +1,5 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
 import {
   BodyBattery,
   HabitGrid,
@@ -10,158 +9,148 @@ import {
   type HabitDay,
   type BiometricMetric,
   type UserSettings,
-} from '@/components/you'
-import { useToast } from '@/components/ui/Toast'
-
-// TODO: Replace with API calls
-const mockEnergyLevels: EnergyLevel[] = [
-  { time: '6:00', level: 45, activity: 'Woke up' },
-  { time: '7:00', level: 55 },
-  { time: '8:00', level: 70, activity: 'Morning workout' },
-  { time: '9:00', level: 85 },
-  { time: '10:00', level: 90 },
-  { time: '12:00', level: 80, activity: 'Lunch' },
-  { time: '14:00', level: 75 },
-  { time: '16:00', level: 65 },
-  { time: '18:00', level: 60, activity: 'Evening walk' },
-  { time: '20:00', level: 50 },
-  { time: '22:00', level: 35, activity: 'Bedtime' },
-]
-
-// Generate mock habit data with deterministic values to avoid hydration issues
-const mockHabitData: HabitDay[] = (() => {
-  // Use a fixed base date to ensure consistent server/client rendering
-  const baseDate = new Date('2024-02-12')
-  // Predefined completion pattern (deterministic, not random)
-  const completionPattern = [
-    0, 0, 0, 0, 0, // First 5 days: 0%
-    100, 80, 90, 100, 75, // Next 5: varying
-    100, 100, 60, 85, 100, // Next 5: varying
-    70, 100, 90, 100, 65, // Next 5: varying
-    100, 80, 100, 90, 100, // Next 5: varying
-    75, 100, 85, 100, 90, // Last 5: varying
-  ]
-
-  return Array.from({ length: 30 }, (_, i) => {
-    const date = new Date(baseDate)
-    date.setDate(baseDate.getDate() - (29 - i))
-    const completed = completionPattern[i]
-    return {
-      date: date.toISOString().split('T')[0],
-      completed,
-      habitsCompleted: Math.floor((completed / 100) * 5),
-      totalHabits: 5,
-    }
-  })
-})()
-
-const mockBiometrics: BiometricMetric[] = [
-  {
-    type: 'weight',
-    label: 'Weight',
-    unit: 'kg',
-    color: '#3B82F6',
-    icon: '⚖️',
-    goal: 75,
-    data: [
-      { date: 'Jan 1', value: 82 },
-      { date: 'Jan 8', value: 81.2 },
-      { date: 'Jan 15', value: 80.5 },
-      { date: 'Jan 22', value: 79.8 },
-      { date: 'Jan 29', value: 79.0 },
-      { date: 'Feb 5', value: 78.5 },
-      { date: 'Feb 12', value: 77.8 },
-    ],
-  },
-  {
-    type: 'bodyFat',
-    label: 'Body Fat',
-    unit: '%',
-    color: '#F59E0B',
-    icon: '📊',
-    goal: 15,
-    data: [
-      { date: 'Jan 1', value: 22 },
-      { date: 'Jan 8', value: 21.5 },
-      { date: 'Jan 15', value: 21 },
-      { date: 'Jan 22', value: 20.5 },
-      { date: 'Jan 29', value: 20 },
-      { date: 'Feb 5', value: 19.5 },
-      { date: 'Feb 12', value: 19 },
-    ],
-  },
-  {
-    type: 'sleep',
-    label: 'Sleep',
-    unit: 'hours',
-    color: '#8B5CF6',
-    icon: '😴',
-    goal: 8,
-    data: [
-      { date: 'Mon', value: 7.5 },
-      { date: 'Tue', value: 7.2 },
-      { date: 'Wed', value: 8.1 },
-      { date: 'Thu', value: 7.8 },
-      { date: 'Fri', value: 6.5 },
-      { date: 'Sat', value: 8.5 },
-      { date: 'Sun', value: 8.2 },
-    ],
-  },
-  {
-    type: 'steps',
-    label: 'Steps',
-    unit: 'k',
-    color: '#10B981',
-    icon: '👟',
-    goal: 10,
-    data: [
-      { date: 'Mon', value: 8.5 },
-      { date: 'Tue', value: 10.2 },
-      { date: 'Wed', value: 9.1 },
-      { date: 'Thu', value: 11.8 },
-      { date: 'Fri', value: 7.5 },
-      { date: 'Sat', value: 12.5 },
-      { date: 'Sun', value: 9.2 },
-    ],
-  },
-]
-
-const mockUserSettings: UserSettings = {
-  name: 'John Doe',
-  email: 'john@example.com',
-  age: 28,
-  gender: 'male',
-  height: 178,
-  currentWeight: 77.8,
-  goalWeight: 75,
-  activityLevel: 'moderate',
-  goals: ['Lose weight', 'Improve fitness', 'Build habits'],
-  notifications: {
-    email: true,
-    push: true,
-    daily: true,
-    weekly: false,
-  },
-}
+} from '@/components/you';
+import { useToast } from '@/components/ui/Toast';
+import { useBodyBattery, useHabitsAnalytics } from '@/hooks/useAnalytics';
+import { useUser, useUpdateUser } from '@/hooks/useUser';
 
 export default function YouPage() {
-  const [settings, setSettings] = useState<UserSettings>(mockUserSettings)
-  const [isSaving, setIsSaving] = useState(false)
-  const { showToast } = useToast()
+  const { showToast } = useToast();
+
+  // Fetch analytics data from API
+  const { data: bodyBatteryData, isLoading: bodyBatteryLoading, error: bodyBatteryError } = useBodyBattery(7);
+  const { data: habitsData, isLoading: habitsLoading, error: habitsError } = useHabitsAnalytics(30);
+
+  // Fetch user data for settings
+  const { data: userData, isLoading: userLoading } = useUser();
+  const { mutateAsync: updateUser, isPending: isUpdating } = useUpdateUser();
 
   const handleSaveSettings = async (newSettings: UserSettings) => {
-    setIsSaving(true)
+    try {
+      // Update only the fields that exist in the API
+      await updateUser({
+        full_name: newSettings.name,
+        email: newSettings.email,
+      });
 
-    // TODO: Replace with API call
-    setTimeout(() => {
-      setSettings(newSettings)
-      setIsSaving(false)
-      showToast({ type: 'success', title: 'Settings saved successfully!' })
-    }, 1000)
-  }
+      showToast({ type: 'success', title: 'Settings saved successfully!' });
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Failed to save settings',
+        message: 'Please try again',
+      });
+    }
+  };
 
   const handleDayClick = (date: string) => {
-    showToast({ type: 'info', title: `Viewing habits for ${date}` })
+    showToast({ type: 'info', title: `Viewing habits for ${date}` });
+  };
+
+  // Convert API body battery data to EnergyLevel format
+  const energyLevels: EnergyLevel[] =
+    bodyBatteryData?.data?.map((point: any) => ({
+      time: new Date(point.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      level: point.energy_level || point.value || 50,
+      activity: point.activity || point.note,
+    })) || [];
+
+  const currentLevel = energyLevels.length > 0 ? energyLevels[energyLevels.length - 1].level : 50;
+
+  // Convert API habits data to HabitDay format
+  const habitData: HabitDay[] =
+    habitsData?.daily_data?.map((day: any) => ({
+      date: day.date,
+      completed: Math.round((day.completed_count / (day.total_count || 1)) * 100),
+      habitsCompleted: day.completed_count || 0,
+      totalHabits: day.total_count || 0,
+    })) || [];
+
+  // Mock biometrics (not in API yet)
+  const mockBiometrics: BiometricMetric[] = [
+    {
+      type: 'weight',
+      label: 'Weight',
+      unit: 'kg',
+      color: '#3B82F6',
+      icon: '⚖️',
+      goal: 75,
+      data: [
+        { date: 'Week 1', value: 80 },
+        { date: 'Week 2', value: 79.5 },
+        { date: 'Week 3', value: 79 },
+        { date: 'Week 4', value: 78.5 },
+      ],
+    },
+    {
+      type: 'sleep',
+      label: 'Sleep',
+      unit: 'hours',
+      color: '#8B5CF6',
+      icon: '😴',
+      goal: 8,
+      data: [
+        { date: 'Mon', value: 7.5 },
+        { date: 'Tue', value: 7.2 },
+        { date: 'Wed', value: 8.1 },
+        { date: 'Thu', value: 7.8 },
+        { date: 'Fri', value: 6.5 },
+        { date: 'Sat', value: 8.5 },
+        { date: 'Sun', value: 8.2 },
+      ],
+    },
+  ];
+
+  // Convert user data to settings format
+  const userSettings: UserSettings = {
+    name: userData?.full_name || '',
+    email: userData?.email || '',
+    age: 28,
+    gender: 'male',
+    height: 178,
+    currentWeight: 78,
+    goalWeight: 75,
+    activityLevel: 'moderate',
+    goals: ['Lose weight', 'Improve fitness'],
+    notifications: {
+      email: true,
+      push: true,
+      daily: true,
+      weekly: false,
+    },
+  };
+
+  // Loading state
+  if (bodyBatteryLoading || habitsLoading || userLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Loading your profile...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (bodyBatteryError || habitsError) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Your Profile</h1>
+          <p className="text-gray-600">Track your progress and manage your settings</p>
+        </div>
+
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-red-800 font-semibold mb-2">Failed to load analytics data</h3>
+          <p className="text-red-600 text-sm">
+            {(bodyBatteryError as any)?.detail || (habitsError as any)?.detail || 'Please try refreshing the page'}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -177,37 +166,23 @@ export default function YouPage() {
         {/* Left Column */}
         <div className="space-y-8">
           {/* Body Battery */}
-          <BodyBattery
-            energyLevels={mockEnergyLevels}
-            currentLevel={mockEnergyLevels[mockEnergyLevels.length - 1].level}
-          />
+          <BodyBattery energyLevels={energyLevels} currentLevel={currentLevel} />
 
           {/* Habit Grid */}
-          <HabitGrid
-            habitData={mockHabitData}
-            weeks={12}
-            onDayClick={handleDayClick}
-          />
+          <HabitGrid habitData={habitData} weeks={12} onDayClick={handleDayClick} />
         </div>
 
         {/* Right Column */}
         <div className="space-y-8">
           {/* Biometrics Chart */}
-          <BiometricsChart
-            metrics={mockBiometrics}
-            defaultMetric="weight"
-          />
+          <BiometricsChart metrics={mockBiometrics} defaultMetric="weight" />
         </div>
       </div>
 
       {/* Settings Form - Full Width */}
       <div>
-        <SettingsForm
-          initialSettings={settings}
-          onSave={handleSaveSettings}
-          isLoading={isSaving}
-        />
+        <SettingsForm initialSettings={userSettings} onSave={handleSaveSettings} isLoading={isUpdating} />
       </div>
     </div>
-  )
+  );
 }

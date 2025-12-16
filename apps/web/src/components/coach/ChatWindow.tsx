@@ -73,7 +73,7 @@ export default function ChatWindow({
               </h4>
               <p className="text-gray-600 mb-6 max-w-md">
                 Ask me anything about fitness, nutrition, habits, or your health journey.
-                I'm here to guide you!
+                I&apos;m here to guide you!
               </p>
 
               {/* Quick Actions for empty state */}
