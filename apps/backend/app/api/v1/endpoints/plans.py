@@ -12,6 +12,7 @@ from app.schemas.task import TaskCreate
 from app.crud import plan as crud_plan
 from app.crud import task as crud_task
 from app.services.openai_service import generate_health_plan
+from app.services.ai_engine import generate_roadmap, generate_weekly_tasks
 
 router = APIRouter()
 
@@ -44,8 +45,8 @@ async def generate_plan(
         "goals": current_user.goals
     }
 
-    # Generate AI-powered roadmap using OpenAI
-    ai_roadmap = generate_health_plan(user_data, current_user.goals)
+    # Generate AI-powered roadmap using AI Engine with safety rules
+    ai_roadmap = generate_roadmap(user_data, current_user.goals)
 
     plan_in = PlanCreate(
         title="Your Personalized Health Journey",
@@ -56,75 +57,53 @@ async def generate_plan(
     db_plan = await crud_plan.create_plan(db, current_user.id, plan_in)
     await db.flush()
 
-    # Generate initial tasks for the current week
-    # Use today + 1 day to ensure tasks are always visible (handles timezone issues)
+    # Generate initial weekly tasks (7 days) using AI Engine
     today = date.today()
     start_date = today  # Start from today
 
-    sample_tasks = [
-        # Day 1 (Today)
-        TaskCreate(
-            title="Morning Workout",
-            description="30-minute cardio session to kickstart your day",
-            priority=TaskPriority.HIGH,
-            scheduled_date=start_date,
-            time_of_day=TimeOfDay.MORNING,
-            duration_minutes=30
-        ),
-        TaskCreate(
-            title="Track Your Meals",
-            description="Log all meals and snacks in your food diary",
-            priority=TaskPriority.MEDIUM,
-            scheduled_date=start_date,
-            time_of_day=TimeOfDay.ANYTIME,
-            duration_minutes=10
-        ),
-        TaskCreate(
-            title="Evening Stretching",
-            description="15-minute stretching routine before bed",
-            priority=TaskPriority.MEDIUM,
-            scheduled_date=start_date,
-            time_of_day=TimeOfDay.EVENING,
-            duration_minutes=15
-        ),
-        # Day 2
-        TaskCreate(
-            title="Morning Hydration",
-            description="Drink 500ml of water first thing in the morning",
-            priority=TaskPriority.HIGH,
-            scheduled_date=start_date + timedelta(days=1),
-            time_of_day=TimeOfDay.MORNING,
-            duration_minutes=5
-        ),
-        TaskCreate(
-            title="Healthy Lunch Prep",
-            description="Prepare a balanced lunch with protein and vegetables",
-            priority=TaskPriority.MEDIUM,
-            scheduled_date=start_date + timedelta(days=1),
-            time_of_day=TimeOfDay.AFTERNOON,
-            duration_minutes=20
-        ),
-        # Day 3
-        TaskCreate(
-            title="Yoga Session",
-            description="20-minute yoga for flexibility and mindfulness",
-            priority=TaskPriority.MEDIUM,
-            scheduled_date=start_date + timedelta(days=2),
-            time_of_day=TimeOfDay.MORNING,
-            duration_minutes=20
-        ),
-        TaskCreate(
-            title="Healthy Dinner",
-            description="Cook a nutritious dinner with vegetables and lean protein",
-            priority=TaskPriority.MEDIUM,
-            scheduled_date=start_date + timedelta(days=2),
-            time_of_day=TimeOfDay.EVENING,
-            duration_minutes=30
-        ),
-    ]
+    # Get first phase for task generation
+    first_phase = ai_roadmap.get('phases', [])[0] if ai_roadmap.get('phases') else {
+        'name': 'Foundation',
+        'goals': ['Establish baseline habits']
+    }
+
+    # Generate AI-powered weekly tasks (7 days instead of 3)
+    ai_tasks = generate_weekly_tasks(
+        user_data=user_data,
+        phase=first_phase,
+        week_number=1,
+        start_date=start_date
+    )
+
+    # Convert AI tasks to TaskCreate objects
+    task_creates = []
+    for task in ai_tasks:
+        # Map priority string to enum
+        priority_map = {
+            'low': TaskPriority.LOW,
+            'medium': TaskPriority.MEDIUM,
+            'high': TaskPriority.HIGH
+        }
+
+        # Map time_of_day string to enum
+        time_map = {
+            'morning': TimeOfDay.MORNING,
+            'afternoon': TimeOfDay.AFTERNOON,
+            'evening': TimeOfDay.EVENING,
+            'anytime': TimeOfDay.ANYTIME
+        }
+
+        task_creates.append(TaskCreate(
+            title=task.get('title', 'Health Task'),
+            description=task.get('description', ''),
+            priority=priority_map.get(task.get('priority', 'medium'), TaskPriority.MEDIUM),
+            scheduled_date=task.get('scheduled_date', start_date),
+            time_of_day=time_map.get(task.get('time_of_day', 'anytime'), TimeOfDay.ANYTIME),
+            duration_minutes=task.get('duration_minutes', 30)
+        ))
 
     # Create all tasks
-    for task_data in sample_tasks:
+    for task_data in task_creates:
         await crud_task.create_task(db, db_plan.id, task_data)
 
     await db.commit()
@@ -171,36 +150,78 @@ async def regenerate_plan(
     # Deactivate all existing plans
     await crud_plan.deactivate_user_plans(db, current_user.id)
 
-    # In production, this would analyze user's progress and generate optimized plan
-    # For now, create a stub regenerated plan
-    stub_roadmap = {
-        "phases": [
-            {
-                "name": "Accelerated Phase",
-                "duration": "3 weeks",
-                "goals": ["Build on existing progress", "Increase intensity"],
-                "milestones": ["Maintain current habits", "Increase activity by 20%"]
-            },
-            {
-                "name": "Breakthrough Phase",
-                "duration": "5 weeks",
-                "goals": ["Push past plateau", "Achieve significant progress"],
-                "milestones": ["75% progress toward goal", "New personal bests"]
-            }
-        ],
-        "timeline": {
-            "total_duration": "8 weeks",
-            "estimated_completion": "Based on improved progress rate"
-        }
+    # Prepare user data for AI plan regeneration
+    user_data = {
+        "age": current_user.age,
+        "gender": current_user.gender,
+        "current_weight": current_user.current_weight,
+        "goal_weight": current_user.goal_weight,
+        "height": current_user.height,
+        "activity_level": current_user.activity_level,
+        "goals": current_user.goals
     }
+
+    # Generate fresh AI-powered roadmap with safety rules
+    ai_roadmap = generate_roadmap(user_data, current_user.goals)
 
     plan_in = PlanCreate(
         title="Your Regenerated Health Journey",
         description="An updated plan optimized based on your progress",
-        roadmap=stub_roadmap
+        roadmap=ai_roadmap
     )
 
     db_plan = await crud_plan.create_plan(db, current_user.id, plan_in)
+    await db.flush()
+
+    # Generate initial weekly tasks for regenerated plan
+    today = date.today()
+    start_date = today
+
+    # Get first phase for task generation
+    first_phase = ai_roadmap.get('phases', [])[0] if ai_roadmap.get('phases') else {
+        'name': 'Foundation',
+        'goals': ['Establish baseline habits']
+    }
+
+    # Generate AI-powered weekly tasks
+    ai_tasks = generate_weekly_tasks(
+        user_data=user_data,
+        phase=first_phase,
+        week_number=1,
+        start_date=start_date
+    )
+
+    # Convert AI tasks to TaskCreate objects
+    task_creates = []
+    for task in ai_tasks:
+        # Map priority string to enum
+        priority_map = {
+            'low': TaskPriority.LOW,
+            'medium': TaskPriority.MEDIUM,
+            'high': TaskPriority.HIGH
+        }
+
+        # Map time_of_day string to enum
+        time_map = {
+            'morning': TimeOfDay.MORNING,
+            'afternoon': TimeOfDay.AFTERNOON,
+            'evening': TimeOfDay.EVENING,
+            'anytime': TimeOfDay.ANYTIME
+        }
+
+        task_creates.append(TaskCreate(
+            title=task.get('title', 'Health Task'),
+            description=task.get('description', ''),
+            priority=priority_map.get(task.get('priority', 'medium'), TaskPriority.MEDIUM),
+            scheduled_date=task.get('scheduled_date', start_date),
+            time_of_day=time_map.get(task.get('time_of_day', 'anytime'), TimeOfDay.ANYTIME),
+            duration_minutes=task.get('duration_minutes', 30)
+        ))
+
+    # Create all tasks
+    for task_data in task_creates:
+        await crud_task.create_task(db, db_plan.id, task_data)
+
     await db.commit()
     await db.refresh(db_plan)
 
