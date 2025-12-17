@@ -42,6 +42,16 @@ pip-delete-this-directory.txt
 *.sqlite
 *.sqlite3
 
+# Database utility scripts (development only)
+apps/backend/create_db.py
+apps/backend/create_schema_psycopg3.py
+apps/backend/create_tables.py
+apps/backend/fix_task_enums.py
+apps/backend/schema.sql
+apps/backend/test_connection*.py
+apps/backend/update_*_table.py
+apps/backend/update_*_table.sql
+
 # IDE
 .vscode/
 .idea/
