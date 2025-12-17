@@ -59,8 +59,8 @@ def _apply_safety_rules(user_data: Dict[str, Any]) -> List[str]:
             constraints.append("User has obesity (BMI > 30): Start with low-impact exercises, gradual progression")
 
     # Activity level constraints
-    activity_level = user_data.get('activity_level', '').lower()
-    if activity_level == 'sedentary':
+    activity_level = user_data.get('activity_level')
+    if activity_level and activity_level.lower() == 'sedentary':
         constraints.append("User is sedentary: Start very gradually, max 20-30 min sessions initially")
 
     return constraints
