@@ -56,6 +56,9 @@ class User(Base, TimestampMixin):
     biometrics: Mapped[List["Biometric"]] = relationship(
         "Biometric", back_populates="user", cascade="all, delete-orphan"
     )
+    daily_metrics: Mapped[List["DailyMetric"]] = relationship(
+        "DailyMetric", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email='{self.email}')>"

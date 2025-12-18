@@ -146,6 +146,21 @@ async def complete_task(
             detail="Task not found"
         )
 
+    # Update daily metrics - increment tasks_completed
+    from app.crud import daily_metric as crud_metric
+
+    # Determine if task is exercise-related
+    exercise_keywords = ['workout', 'exercise', 'run', 'walk', 'yoga', 'gym', 'cardio', 'strength']
+    is_exercise = any(keyword in completed_task.title.lower() for keyword in exercise_keywords)
+    exercise_mins = completed_task.duration_minutes if is_exercise else 0
+
+    await crud_metric.increment_tasks_completed(
+        db,
+        current_user.id,
+        completed_task.scheduled_date,
+        exercise_minutes=exercise_mins
+    )
+
     await db.commit()
     await db.refresh(completed_task)
 

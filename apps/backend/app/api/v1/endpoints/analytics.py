@@ -1,273 +1,328 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+"""
+Analytics API Endpoints
+
+Endpoints for:
+- Body Battery tracking and prediction
+- Energy history and trends
+- Habit grid (task completion visualization)
+- Streak tracking
+"""
+
+from datetime import date, timedelta
 from typing import List
-from datetime import datetime, timedelta, date
-import random
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User as UserModel
-from app.schemas.analytics import (
-    EnergyDataPoint,
-    BodyBatteryChart,
-    HabitDay,
-    HabitGrid,
-    HabitsAnalytics,
-    Correlation,
-    CorrelationsAnalytics
+from app.schemas.daily_metric import (
+    DailyMetric,
+    DailyMetricCreate,
+    DailyMetricUpdate,
+    BodyBatteryResponse,
+    EnergyHistoryResponse
+)
+from app.crud import daily_metric as crud_metric
+from app.services.body_battery import (
+    get_current_body_battery,
+    predict_tomorrow_energy,
+    get_energy_trend,
+    get_energy_advice
 )
 
 router = APIRouter()
 
 
-@router.get("/body-battery", response_model=BodyBatteryChart)
+@router.post("/metrics", response_model=DailyMetric, status_code=status.HTTP_201_CREATED)
+async def log_daily_metric(
+    metric_data: DailyMetricCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> DailyMetric:
+    """
+    Log daily metrics (energy, sleep, mood, stress, weight)
+
+    Creates new metric or updates existing one for the date.
+    Used when user manually logs their daily data.
+    """
+    db_metric = await crud_metric.create_or_update_metric(
+        db, current_user.id, metric_data
+    )
+    await db.commit()
+    await db.refresh(db_metric)
+    return db_metric
+
+
+@router.get("/metrics/today", response_model=DailyMetric)
+async def get_today_metric(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> DailyMetric:
+    """Get today's metrics"""
+    metric = await crud_metric.get_metric_today(db, current_user.id)
+
+    if not metric:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No metrics logged for today"
+        )
+
+    return metric
+
+
+@router.get("/metrics/{metric_date}", response_model=DailyMetric)
+async def get_metric_by_date(
+    metric_date: date,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> DailyMetric:
+    """Get metrics for specific date"""
+    metric = await crud_metric.get_metric_by_date(db, current_user.id, metric_date)
+
+    if not metric:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No metrics found for {metric_date}"
+        )
+
+    return metric
+
+
+@router.patch("/metrics/{metric_date}", response_model=DailyMetric)
+async def update_daily_metric(
+    metric_date: date,
+    update_data: DailyMetricUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> DailyMetric:
+    """Update metrics for specific date"""
+    metric = await crud_metric.get_metric_by_date(db, current_user.id, metric_date)
+
+    if not metric:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No metrics found for {metric_date}"
+        )
+
+    updated_metric = await crud_metric.update_metric(db, metric, update_data)
+    await db.commit()
+    await db.refresh(updated_metric)
+    return updated_metric
+
+
+@router.get("/body-battery", response_model=BodyBatteryResponse)
 async def get_body_battery(
-    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
-) -> BodyBatteryChart:
+) -> BodyBatteryResponse:
     """
-    Get body battery / energy chart (stub)
+    Get current Body Battery status
 
-    Analyzes energy levels over time to identify patterns and optimal times.
-    This is a stub endpoint - in production, this would analyze actual user data.
-
-    Query parameters:
-    - **days**: Number of days to include (1-90, default: 7)
-
-    Returns energy chart with trends and insights
+    Returns:
+    - Current energy level (0-100)
+    - Trend (increasing/stable/decreasing)
+    - Prediction for tomorrow
+    - Personalized advice
     """
-    # Generate stub energy data
-    data_points = []
-    today = date.today()
+    current_energy, _ = await get_current_body_battery(db, current_user.id)
+    trend = await get_energy_trend(db, current_user.id, days=7)
+    prediction = await predict_tomorrow_energy(db, current_user.id)
+    advice = await get_energy_advice(db, current_user.id)
 
-    for day_offset in range(days):
-        current_date = today - timedelta(days=day_offset)
-
-        # Generate 3-4 data points per day at different times
-        times = ["08:00", "12:00", "16:00", "20:00"]
-        for time_str in times[:random.randint(3, 4)]:
-            # Energy typically higher in morning/afternoon, lower in evening
-            hour = int(time_str.split(":")[0])
-            base_energy = 7.0 if 8 <= hour <= 14 else 5.0 if 15 <= hour <= 18 else 4.0
-
-            energy = max(0, min(10, base_energy + random.uniform(-2, 2)))
-
-            data_points.append(
-                EnergyDataPoint(
-                    date=current_date,
-                    time=time_str,
-                    energy_level=round(energy, 1),
-                    activity=random.choice(["Work", "Exercise", "Rest", "Social", None])
-                )
-            )
-
-    # Calculate statistics
-    avg_energy = sum(dp.energy_level for dp in data_points) / len(data_points)
-
-    # Find peak and low times
-    time_energies = {}
-    for dp in data_points:
-        if dp.time not in time_energies:
-            time_energies[dp.time] = []
-        time_energies[dp.time].append(dp.energy_level)
-
-    avg_by_time = {time: sum(energies) / len(energies) for time, energies in time_energies.items()}
-    peak_time = max(avg_by_time, key=avg_by_time.get)
-    low_time = min(avg_by_time, key=avg_by_time.get)
-
-    # Generate trends
-    trends = [
-        "Your energy peaks in the late morning",
-        "Consider scheduling important tasks around 10-11 AM",
-        "Energy dips after lunch - this is normal",
-        "Evening energy could improve with better sleep"
-    ]
-
-    return BodyBatteryChart(
-        data_points=data_points,
-        average_energy=round(avg_energy, 1),
-        peak_time=peak_time,
-        low_time=low_time,
-        trends=random.sample(trends, 3)
+    return BodyBatteryResponse(
+        current_energy=current_energy,
+        trend=trend,
+        prediction_tomorrow=prediction,
+        advice=advice
     )
 
 
-@router.get("/habits", response_model=HabitsAnalytics)
-async def get_habits_analytics(
-    days: int = Query(30, ge=7, le=90, description="Number of days to analyze"),
+@router.get("/energy-history", response_model=List[EnergyHistoryResponse])
+async def get_energy_history(
+    days: int = 7,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
-) -> HabitsAnalytics:
+) -> List[EnergyHistoryResponse]:
     """
-    Get habits analytics with completion grid (stub)
+    Get energy history for last N days (default 7)
 
-    Visualizes habit completion over time with streaks and completion rates.
-    This is a stub endpoint - in production, this would track actual habit data.
-
-    Query parameters:
-    - **days**: Number of days to include (7-90, default: 30)
-
-    Returns habit grids with completion statistics
+    Returns daily energy levels, tasks completed, and sleep hours
+    for visualization in charts.
     """
-    # Generate stub habit data
-    habit_names = [
-        "Morning Exercise",
-        "Meditation",
-        "Healthy Breakfast",
-        "8 Hours Sleep",
-        "10K Steps"
-    ]
-
-    habits = []
-    today = date.today()
-
-    for habit_name in habit_names:
-        # Each habit has different completion rate
-        base_completion_rate = random.uniform(0.6, 0.9)
-
-        habit_days = []
-        current_streak = 0
-        completed_count = 0
-
-        for day_offset in range(days - 1, -1, -1):
-            current_date = today - timedelta(days=day_offset)
-            completed = random.random() < base_completion_rate
-
-            if completed:
-                completed_count += 1
-                if day_offset == 0 or (day_offset > 0 and habit_days and habit_days[-1].completed):
-                    current_streak += 1
-                else:
-                    current_streak = 1
-            else:
-                if day_offset == 0:
-                    current_streak = 0
-
-            habit_days.append(
-                HabitDay(
-                    date=current_date,
-                    completed=completed,
-                    notes=random.choice([None, "Felt great!", "Tough day", "Making progress"]) if completed else None
-                )
-            )
-
-        completion_rate = (completed_count / days) * 100
-
-        habits.append(
-            HabitGrid(
-                habit_name=habit_name,
-                days=habit_days,
-                streak=current_streak,
-                completion_rate=round(completion_rate, 1)
-            )
+    if days < 1 or days > 90:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Days must be between 1 and 90"
         )
 
-    # Calculate overall statistics
-    overall_completion = sum(h.completion_rate for h in habits) / len(habits)
-    best_habit = max(habits, key=lambda h: h.completion_rate).habit_name
-    worst_habit = min(habits, key=lambda h: h.completion_rate).habit_name
+    metrics = await crud_metric.get_metrics_last_n_days(db, current_user.id, days)
 
-    return HabitsAnalytics(
-        habits=habits,
-        overall_completion=round(overall_completion, 1),
-        best_habit=best_habit,
-        improvement_area=worst_habit
-    )
+    # Fill in missing dates with None values
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+
+    result = []
+    metric_dict = {m.date: m for m in metrics}
+
+    current_date = start_date
+    while current_date <= end_date:
+        metric = metric_dict.get(current_date)
+        result.append(EnergyHistoryResponse(
+            date=current_date,
+            energy_level=metric.energy_level if metric else None,
+            tasks_completed=metric.tasks_completed if metric else 0,
+            hours_slept=metric.hours_slept if metric else None
+        ))
+        current_date += timedelta(days=1)
+
+    return result
 
 
-@router.get("/correlations", response_model=CorrelationsAnalytics)
-async def get_correlations(
+@router.get("/habits", response_model=List[dict])
+async def get_habit_grid(
+    days: int = 90,
     db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
-) -> CorrelationsAnalytics:
+) -> List[dict]:
     """
-    Get health correlations analytics (Pro feature stub)
+    Get habit grid data (GitHub-style contribution graph)
 
-    Identifies correlations between different health metrics.
-    This is a stub endpoint - in production, this would require Pro subscription
-    and analyze actual user data to find correlations.
+    Returns task completion data for last N days for visualization.
+    Each day shows: date, tasks_completed, completion_level (0-4)
 
-    Returns correlation analysis with actionable insights
+    Completion levels:
+    - 0: No tasks (empty)
+    - 1: 1 task (light)
+    - 2: 2-3 tasks (medium)
+    - 3: 4-5 tasks (high)
+    - 4: 6+ tasks (intense)
     """
-    # Check if user has Pro (stub - in production, check subscription)
-    has_pro = False  # Stub
-
-    if not has_pro:
-        # Return limited data for non-Pro users
-        return CorrelationsAnalytics(
-            correlations=[
-                Correlation(
-                    variable_x="Sleep Quality",
-                    variable_y="Energy Level",
-                    correlation_coefficient=0.72,
-                    strength="strong",
-                    direction="positive",
-                    insight="Better sleep strongly correlates with higher energy levels"
-                )
-            ],
-            recommendations=[
-                "Upgrade to Pro to unlock full correlation analysis",
-                "Discover how your habits affect each other",
-                "Get personalized optimization recommendations"
-            ],
-            requires_pro=True
+    if days < 1 or days > 365:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Days must be between 1 and 365"
         )
 
-    # Pro user - return full correlations (stub data)
-    correlations = [
-        Correlation(
-            variable_x="Sleep Quality",
-            variable_y="Energy Level",
-            correlation_coefficient=0.72,
-            strength="strong",
-            direction="positive",
-            insight="7+ hours of sleep increases next-day energy by 40%"
-        ),
-        Correlation(
-            variable_x="Exercise",
-            variable_y="Sleep Quality",
-            correlation_coefficient=0.58,
-            strength="moderate",
-            direction="positive",
-            insight="Morning exercise improves sleep quality significantly"
-        ),
-        Correlation(
-            variable_x="Screen Time Before Bed",
-            variable_y="Sleep Quality",
-            correlation_coefficient=-0.65,
-            strength="strong",
-            direction="negative",
-            insight="Screen time within 1 hour of bed reduces sleep quality"
-        ),
-        Correlation(
-            variable_x="Hydration",
-            variable_y="Energy Level",
-            correlation_coefficient=0.45,
-            strength="moderate",
-            direction="positive",
-            insight="Proper hydration (2L+ water) boosts energy levels"
-        ),
-        Correlation(
-            variable_x="Stress Level",
-            variable_y="Sleep Quality",
-            correlation_coefficient=-0.55,
-            strength="moderate",
-            direction="negative",
-            insight="High stress days lead to poorer sleep quality"
-        )
+    metrics = await crud_metric.get_metrics_last_n_days(db, current_user.id, days)
+
+    # Create grid data
+    grid_data = []
+    for metric in metrics:
+        # Determine completion level
+        tasks = metric.tasks_completed
+        if tasks == 0:
+            level = 0
+        elif tasks == 1:
+            level = 1
+        elif tasks <= 3:
+            level = 2
+        elif tasks <= 5:
+            level = 3
+        else:
+            level = 4
+
+        grid_data.append({
+            "date": metric.date.isoformat(),
+            "tasks_completed": tasks,
+            "completion_level": level
+        })
+
+    return grid_data
+
+
+@router.get("/streak", response_model=dict)
+async def get_current_streak(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
+    """
+    Get current streak (consecutive days with at least 1 task completed)
+
+    Returns:
+    - current_streak: Number of consecutive days
+    - message: Motivational message based on streak
+    """
+    streak = await crud_metric.get_streak(db, current_user.id)
+
+    # Generate motivational message
+    if streak == 0:
+        message = "Start your streak today! Complete your first task."
+    elif streak == 1:
+        message = "Great start! Keep the momentum going."
+    elif streak < 7:
+        message = f"{streak} days strong! You're building a habit."
+    elif streak < 30:
+        message = f"Amazing! {streak} day streak. You're on fire! 🔥"
+    elif streak < 100:
+        message = f"Incredible! {streak} days in a row. You're unstoppable!"
+    else:
+        message = f"Legendary! {streak} day streak. You're a true champion! 🏆"
+
+    return {
+        "current_streak": streak,
+        "message": message
+    }
+
+
+@router.get("/correlations/sleep-energy", response_model=dict)
+async def get_sleep_energy_correlation(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+) -> dict:
+    """
+    Analyze correlation between sleep and energy (Pro feature)
+
+    Returns correlation coefficient and insights.
+    """
+    # Get last 30 days of data
+    metrics = await crud_metric.get_metrics_last_n_days(db, current_user.id, 30)
+
+    # Filter metrics with both sleep and energy data
+    data_points = [
+        (m.hours_slept, m.energy_level)
+        for m in metrics
+        if m.hours_slept is not None and m.energy_level is not None
     ]
 
-    recommendations = [
-        "Prioritize sleep - it has the strongest impact on your energy",
-        "Morning exercise creates a positive cycle: better sleep → more energy → better workouts",
-        "Reduce screen time 1-2 hours before bed to improve sleep quality",
-        "Track hydration - it's an easy win for energy levels",
-        "Manage stress through meditation or evening routines"
-    ]
+    if len(data_points) < 5:
+        return {
+            "correlation": None,
+            "insight": "Not enough data. Log sleep and energy for at least 5 days.",
+            "data_points": len(data_points)
+        }
 
-    return CorrelationsAnalytics(
-        correlations=correlations,
-        recommendations=recommendations,
-        requires_pro=False
-    )
+    # Simple correlation calculation
+    sleep_values = [x[0] for x in data_points]
+    energy_values = [x[1] for x in data_points]
+
+    n = len(data_points)
+    mean_sleep = sum(sleep_values) / n
+    mean_energy = sum(energy_values) / n
+
+    numerator = sum((s - mean_sleep) * (e - mean_energy) for s, e in data_points)
+    denom_sleep = sum((s - mean_sleep) ** 2 for s in sleep_values) ** 0.5
+    denom_energy = sum((e - mean_energy) ** 2 for e in energy_values) ** 0.5
+
+    if denom_sleep == 0 or denom_energy == 0:
+        correlation = 0
+    else:
+        correlation = numerator / (denom_sleep * denom_energy)
+
+    # Generate insight
+    if correlation > 0.5:
+        insight = "Strong positive correlation! More sleep = more energy for you."
+    elif correlation > 0.2:
+        insight = "Moderate positive correlation. Sleep helps your energy."
+    elif correlation < -0.2:
+        insight = "Interesting! Your energy might be affected by sleep quality, not just duration."
+    else:
+        insight = "Weak correlation. Other factors might be influencing your energy more."
+
+    return {
+        "correlation": round(correlation, 2),
+        "insight": insight,
+        "data_points": n,
+        "average_sleep": round(mean_sleep, 1),
+        "average_energy": round(mean_energy, 1)
+    }
